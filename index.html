@@ -1,0 +1,261 @@
+# Uzbek Translator — Full-stack Production-ready Demo
+
+This repository is a **production-ready, deployable** full-stack web app (React + Serverless API) that translates Uzbek → English/Russian using a paid translation API (DeepL or Google Translate). It is designed to be deployed on **Vercel** (recommended) or Render. The project includes frontend, API route, environment variable handling, Tailwind styling, and deployment instructions.
+
+> ⚠️ **Important:** You must provide your own translation API key (DeepL or Google Cloud Translate). The repo uses an environment variable `TRANSLATE_PROVIDER` (`deepl` or `google`) and `TRANSLATE_API_KEY`. Do **not** commit secrets.
+
+---
+
+## What you get in this single-file repo
+
+- `package.json` (scripts)
+- `next.config.js` (Next.js config)
+- `tailwind.config.js` and `postcss.config.js`
+- `pages/index.jsx` — React frontend (Tailwind)
+- `pages/api/translate.js` — Serverless API endpoint (Node) that calls the translation provider
+- `README` with deployment steps
+
+You can copy this project into a new GitHub repo and deploy to Vercel, or run locally.
+
+---
+
+## Files (copy into a new Next.js app structure)
+
+### package.json
+
+```json
+{
+  "name": "uzbek-translator-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.1.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "axios": "1.4.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "10.4.14",
+    "postcss": "8.4.24",
+    "tailwindcss": "3.4.8"
+  }
+}
+```
+
+---
+
+### next.config.js
+
+```js
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+}
+module.exports = nextConfig
+```
+
+---
+
+### tailwind.config.js
+
+```js
+module.exports = {
+  content: ['./pages/**/*.{js,jsx,ts,tsx}', './components/**/*.{js,jsx,ts,tsx}'],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+```
+
+---
+
+### postcss.config.js
+
+```js
+module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+```
+
+---
+
+### pages/index.jsx
+
+```jsx
+import { useState } from 'react'
+import axios from 'axios'
+
+export default function Home() {
+  const [input, setInput] = useState('')
+  const [target, setTarget] = useState('en')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState('')
+  const [error, setError] = useState('')
+
+  async function handleTranslate() {
+    setError('')
+    if (!input.trim()) return setError('Iltimos, tarjima uchun matn kiriting')
+    setLoading(true)
+    try {
+      const res = await axios.post('/api/translate', { text: input, target })
+      setResult(res.data.translation)
+    } catch (e) {
+      console.error(e)
+      setError(e?.response?.data?.error || 'Tarjima xatosi. Server loglarini tekshiring.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-3xl bg-white rounded-2xl shadow-md p-8">
+        <h1 className="text-2xl font-semibold mb-4">O‘zbek → Rus / Ingliz Tarjimon (Professional)</h1>
+        <p className="text-sm text-gray-600 mb-4">Matn kiriting, tilni tanlang va <strong>Tarjima qilish</strong> tugmasini bosing. Backend API orqali haqiqiy tarjima xizmatiga murojaat qilinadi.</p>
+
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          rows={6}
+          className="w-full border rounded-md p-3 mb-3"
+          placeholder="Matnni shu yerga yozing..."
+        />
+
+        <div className="flex gap-3 items-center">
+          <select value={target} onChange={(e) => setTarget(e.target.value)} className="border p-2 rounded">
+            <option value="en">Ingliz (English)</option>
+            <option value="ru">Rus (Русский)</option>
+          </select>
+
+          <button onClick={handleTranslate} className="bg-blue-600 text-white px-4 py-2 rounded" disabled={loading}>
+            {loading ? 'Tarjima qilinyapti...' : 'Tarjima qilish'}
+          </button>
+
+          <button onClick={() => { setInput(''); setResult(''); setError('') }} className="ml-auto text-sm text-gray-500">Tozalash</button>
+        </div>
+
+        {error && <div className="mt-4 text-red-600">{error}</div>}
+
+        <div className="mt-6">
+          <h2 className="text-lg font-medium">Natija:</h2>
+          <div className="mt-2 p-4 bg-gray-50 border rounded min-h-[120px]">
+            {result || <span className="text-gray-400">Tarjima shu yerda chiqadi...</span>}
+          </div>
+        </div>
+
+        <div className="mt-6 text-xs text-gray-500">
+          <div>🔒 API kalitingiz serverda saqlanadi (CLIENT SIDE ga chiqmaydi). SERVER_URL yoki Vercel env vars orqali TRANSLATE_PROVIDER va TRANSLATE_API_KEY ni sozlang.</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+### pages/api/translate.js
+
+```js
+// Serverless API endpoint for translation
+import axios from 'axios'
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
+
+  const { text, target } = req.body || {}
+  if (!text || !target) return res.status(400).json({ error: 'Missing text or target' })
+
+  const provider = process.env.TRANSLATE_PROVIDER || 'deepl' // 'deepl' or 'google'
+  const key = process.env.TRANSLATE_API_KEY
+  if (!key) return res.status(500).json({ error: 'Translation API key not configured on server' })
+
+  try {
+    if (provider === 'deepl') {
+      // DeepL API (Recommended for quality). Expects target like EN or RU
+      const lang = target.toUpperCase()
+      const url = `https://api-free.deepl.com/v2/translate`
+      const params = new URLSearchParams()
+      params.append('auth_key', key)
+      params.append('text', text)
+      params.append('target_lang', lang)
+
+      const resp = await axios.post(url, params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      })
+
+      const translation = resp.data.translations?.[0]?.text || ''
+      return res.status(200).json({ translation })
+    } else {
+      // Google Translate (Cloud Translation) simple REST usage
+      // Note: Google Cloud Translate v2/v3 requires project setup and billing
+      const url = `https://translation.googleapis.com/language/translate/v2?key=${key}`
+      const resp = await axios.post(url, { q: text, target })
+      const translation = resp.data.data.translations?.[0]?.translatedText || ''
+      return res.status(200).json({ translation })
+    }
+  } catch (err) {
+    console.error('Translate error', err?.response?.data || err.message)
+    return res.status(500).json({ error: 'Provider error or invalid API key' })
+  }
+}
+```
+
+---
+
+## Deployment & Environment
+
+### Required env vars (on Vercel or Render)
+- `TRANSLATE_PROVIDER` = `deepl` or `google`
+- `TRANSLATE_API_KEY` = your API key
+
+### Recommended deployment (Vercel)
+1. Create a GitHub repo and push this project.
+2. Connect the repo to Vercel.
+3. In Vercel dashboard, set Environment Variables listed above.
+4. Deploy. Vercel will build and serve the serverless API automatically.
+
+### Local run
+1. `npm install`
+2. create `.env.local` with:
+   ```
+   TRANSLATE_PROVIDER=deepl
+   TRANSLATE_API_KEY=your_key_here
+   ```
+3. `npm run dev` and open `http://localhost:3000`
+
+---
+
+## Security & Best Practices
+- **Never** expose API keys client-side.
+- Use rate-limiting / basic abuse protection (Vercel has built-in limits). Consider adding recaptcha if public.
+- If expecting heavy traffic, consider a paid translation plan (DeepL Pro or Google Cloud Translate) and caching translations.
+- Monitor usage and billing on the translation provider dashboard.
+
+---
+
+## Add-ons you can enable later
+- File upload translation (DOCX, PDF) using `multer` and server-side parsing + sending text to translate.
+- User accounts + paid plan (Stripe) for premium usage and per-user quotas.
+- Usage dashboard (analytics) and caching (Redis) to reduce translation API calls and cost.
+
+---
+
+## Final notes
+This scaffold is production-oriented and built to be simple to deploy on serverless platforms. If you want, I can:
+
+- Generate the complete GitHub repo files for you to copy/paste, or
+- Create and attach a ready-to-deploy ZIP you can download, or
+- Help you deploy to Vercel right now if you give me the GitHub repo link.
+
+Tell me which you'd like next.
